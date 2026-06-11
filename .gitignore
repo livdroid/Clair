@@ -22,21 +22,11 @@ Package.resolved
 Pods/
 Carthage/Build/
 
-# Fastlane artifacts if added later
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots/**/*.png
-fastlane/test_output/
-
 # App archives and exports
 *.xcarchive
 *.ipa
 *.dSYM.zip
 *.dSYM
-
-# Playground
-timeline.xctimeline
-playground.xcworkspace
 
 # Environment / local config
 .env
