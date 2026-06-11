@@ -1,0 +1,53 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode user settings
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Xcode build products
+build/
+DerivedData/
+*.moved-aside
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods / Carthage / SwiftPM artifacts if ever used
+Pods/
+Carthage/Build/
+
+# App archives and exports
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Environment / local config
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Local generated files
+*.generated.swift
+
+# Xcode Cloud / CI local artifacts
+result.xcresult
+*.xcresult
+
+# Code coverage
+*.profdata
+*.profraw
