@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Xcode build products
+DerivedData/
+build/
+Build/
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcarchive
+*.resultbundle
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods / Carthage
+Pods/
+Carthage/Build/
+
+
+# Local configuration and secrets
+.env
+.env.*
+*.local
+*.xcconfig.local
+
+# Editor and tooling
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
