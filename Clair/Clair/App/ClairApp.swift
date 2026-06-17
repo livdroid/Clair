@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ClairApp: App {
@@ -13,5 +14,11 @@ struct ClairApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [
+            Meeting.self,
+            MeetingParticipant.self,
+            TranscriptSegment.self,
+            ActionItem.self
+        ])
     }
 }
