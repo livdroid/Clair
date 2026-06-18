@@ -1,0 +1,78 @@
+//
+//  MockAudioRecordingService.swift
+//  Clair
+//
+//  Created by olivia on 19/06/2026.
+//
+
+
+import Foundation
+import XCTest
+@testable import Clair
+
+@MainActor
+final class MockAudioRecordingService: AudioRecordingService {
+    var isRecording = false
+    var permissionGranted = true
+    var startError: Error?
+    var stopError: Error?
+
+    var recordedAudio = RecordedAudio(
+        fileURL: URL(filePath: "/tmp/test-recording.m4a"),
+        duration: 42
+    )
+
+    func requestPermission() async -> Bool {
+        permissionGranted
+    }
+
+    func startRecording(meetingID: UUID) throws {
+        if let startError {
+            throw startError
+        }
+
+        isRecording = true
+    }
+
+    func stopRecording() throws -> RecordedAudio {
+        if let stopError {
+            throw stopError
+        }
+
+        isRecording = false
+        return recordedAudio
+    }
+    
+    func testRecordingURLUsesMeetingIdentifier() {
+        let meetingID = UUID()
+        let store = AudioFileStore()
+
+        let url = store.recordingURL(for: meetingID)
+
+        XCTAssertEqual(
+            url.lastPathComponent,
+            "\(meetingID.uuidString).m4a"
+        )
+    }
+    
+    @MainActor
+    func testMockStopsWithRecordedAudio() throws {
+        let service = MockAudioRecordingService()
+
+        try service.startRecording(meetingID: UUID())
+        let audio = try service.stopRecording()
+
+        XCTAssertFalse(service.isRecording)
+        XCTAssertEqual(audio.duration, 42)
+    }
+    
+    @MainActor
+    func testMockCanRefusePermission() async {
+        let service = MockAudioRecordingService()
+        service.permissionGranted = false
+
+        let granted = await service.requestPermission()
+
+        XCTAssertFalse(granted)
+    }
+}
