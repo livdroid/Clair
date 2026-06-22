@@ -1,6 +1,6 @@
 import Foundation
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct MeetingDetailView: View {
     @Environment(\.modelContext) private var modelContext
@@ -8,30 +8,98 @@ struct MeetingDetailView: View {
     @Bindable var meeting: Meeting
 
     @State private var recordingService = AVAudioRecordingService()
-    @State private var recordingState: RecordingState = .idle
+    @State private var recordingState: MeetingRecordingState = .idle
     @State private var errorMessage: String?
     @State private var isShowingError = false
+    @State private var showsOverwriteConfirmation = false
+    @State private var audioPlayer = MeetingAudioPlayerController(
+        service: AVAudioPlaybackService()
+    )
+
+    private let audioFileStore = AudioFileStore()
 
     var body: some View {
         Form {
             meetingInformationSection
             recordingSection
             savedAudioSection
+            meetingAudioPlayer
+        }
+        .task(
+            id: "\(meeting.id.uuidString)|\(meeting.audioFilePath ?? "")",
+            {
+                audioPlayer.load(path: resolvedAudioURL?.path)
+            }
+        )
+        .onDisappear {
+            audioPlayer.stop()
         }
         .formStyle(.grouped)
         .padding()
+        .confirmationDialog(
+            "Replace the existing recording?",
+            isPresented: $showsOverwriteConfirmation
+        ) {
+            Button("Replace Recording", role: .destructive) {
+                requestPermissionAndStart()
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The current audio file for this meeting will be replaced.")
+        }
         .alert(
-            "Unable to Record",
+            "Audio Recording Error",
             isPresented: $isShowingError,
             presenting: errorMessage
         ) { _ in
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) {
+                recordingState = .idle
+            }
         } message: { message in
             Text(message)
         }
     }
 
     // MARK: - Sections
+
+    private var meetingAudioPlayer: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if case let .failed(message) = audioPlayer.state {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+            }
+            
+            HStack {
+                Button(
+                    audioPlayer.state == .playing ? "Pause" : "Play",
+                    systemImage: audioPlayer.state == .playing
+                        ? "pause.fill"
+                        : "play.fill"
+                ) {
+                    audioPlayer.togglePlayback()
+                }
+
+                Button("Restart", systemImage: "backward.end.fill") {
+                    audioPlayer.seek(to: 0)
+                }
+            }
+
+            Slider(
+                value: Binding(
+                    get: { audioPlayer.currentTime },
+                    set: { audioPlayer.seek(to: $0) }
+                ),
+                in: 0...max(audioPlayer.duration, 1)
+            )
+            .accessibilityLabel("Playback position")
+
+            Text(
+                "\(audioPlayer.currentTime.formattedClockTime()) / \(audioPlayer.duration.formattedClockTime())"
+            )                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }.disabled(arePlaybackControlsDisabled)
+    }
 
     private var meetingInformationSection: some View {
         Section("Meeting Details") {
@@ -51,7 +119,7 @@ struct MeetingDetailView: View {
 
             if let duration = meeting.duration {
                 LabeledContent("Recorded Duration") {
-                    Text(formattedDuration(duration))
+                    Text(duration.formattedClockTime())
                 }
             }
 
@@ -64,17 +132,17 @@ struct MeetingDetailView: View {
     private var recordingSection: some View {
         Section("Recording") {
             switch recordingState {
-            case .idle:
+            case .idle, .failed:
                 idleRecordingContent
 
-            case .starting:
-                ProgressView("Preparing recording…")
+            case .requestingPermission:
+                ProgressView("Requesting microphone access…")
 
             case .recording(let startedAt):
                 activeRecordingContent(startedAt: startedAt)
 
-            case .stopping:
-                ProgressView("Finalizing recording…")
+            case .saving:
+                ProgressView("Saving recording…")
             }
         }
     }
@@ -84,11 +152,11 @@ struct MeetingDetailView: View {
             Text("No recording in progress.")
                 .foregroundStyle(.secondary)
 
-            Button {
-                startRecording()
-            } label: {
-                Label("Start Recording", systemImage: "record.circle")
-            }
+            Button(
+                "Start Recording",
+                systemImage: "record.circle",
+                action: prepareToStartRecording
+            )
         }
     }
 
@@ -107,7 +175,7 @@ struct MeetingDetailView: View {
                 let elapsed = timeline.date.timeIntervalSince(startedAt)
 
                 LabeledContent("Current Duration") {
-                    Text(formattedDuration(elapsed))
+                    Text(elapsed.formatted())
                         .monospacedDigit()
                 }
             }
@@ -122,10 +190,12 @@ struct MeetingDetailView: View {
 
     @ViewBuilder
     private var savedAudioSection: some View {
-        if let audioFilePath = meeting.audioFilePath {
+        if let audioFilePath = meeting.audioFilePath,
+            let resolvedAudioURL
+        {
             Section("Saved Audio") {
                 LabeledContent("File") {
-                    Text(URL(fileURLWithPath: audioFilePath).lastPathComponent)
+                    Text(resolvedAudioURL.lastPathComponent)
                         .textSelection(.enabled)
                 }
 
@@ -140,51 +210,102 @@ struct MeetingDetailView: View {
     }
 
     // MARK: - Actions
+    
+    private var arePlaybackControlsDisabled: Bool {
+        switch audioPlayer.state {
+        case .ready, .playing, .paused:
+            isAudioPlayerDisabled
+
+        case .idle, .failed:
+            true
+        }
+    }
+    
+    private var resolvedAudioURL: URL? {
+        guard let audioFilePath = meeting.audioFilePath else {
+            return nil
+        }
+
+        if audioFilePath.hasPrefix("/") {
+            return URL(fileURLWithPath: audioFilePath)
+        }
+
+        return audioFileStore.fileURL(for: audioFilePath)
+    }
+
+    private func prepareToStartRecording() {
+        audioPlayer.stop()
+
+        if meeting.audioFilePath == nil {
+            requestPermissionAndStart()
+        } else {
+            showsOverwriteConfirmation = true
+        }
+    }
+
+    private func requestPermissionAndStart() {
+        recordingState = .requestingPermission
+
+        Task {
+            let permissionGranted = await recordingService.requestPermission()
+
+            guard permissionGranted else {
+                presentRecordingError(AudioRecordingError.permissionDenied)
+                return
+            }
+
+            startRecording()
+        }
+    }
 
     private func startRecording() {
-        Task { @MainActor in
-            recordingState = .starting
+        do {
+            try recordingService.startRecording(meetingID: meeting.id)
 
-            do {
-                try await recordingService.startRecording(meetingID: meeting.id)
+            let startedAt = Date.now
 
-                let startedAt = Date()
+            meeting.startedAt = startedAt
+            meeting.endedAt = nil
+            meeting.duration = nil
+            meeting.updatedAt = startedAt
 
-                meeting.startedAt = startedAt
-                meeting.endedAt = nil
-                meeting.updatedAt = startedAt
+            try modelContext.save()
 
-                try modelContext.save()
-
-                recordingState = .recording(startedAt: startedAt)
-            } catch {
-                recordingState = .idle
-                presentError(error)
-            }
+            recordingState = .recording(startedAt: startedAt)
+        } catch {
+            presentRecordingError(error)
         }
     }
 
     private func stopRecording() {
-        Task { @MainActor in
-            recordingState = .stopping
+        recordingState = .saving
 
-            do {
-                let recordedAudio = try recordingService.stopRecording()
+        do {
+            let recordedAudio = try recordingService.stopRecording()
+            let finishedAt = Date.now
 
-                let finishedAt = Date()
+            meeting.audioFilePath = audioFileStore.relativePath(
+                for: recordedAudio.fileURL
+            )
+            meeting.duration = recordedAudio.duration
+            meeting.endedAt = finishedAt
+            meeting.updatedAt = finishedAt
 
-                meeting.audioFilePath = recordedAudio.fileURL.path
-                meeting.duration = recordedAudio.duration
-                meeting.endedAt = finishedAt
-                meeting.updatedAt = finishedAt
+            try modelContext.save()
 
-                try modelContext.save()
+            recordingState = .idle
+        } catch {
+            presentRecordingError(error)
+        }
+    }
 
-                recordingState = .idle
-            } catch {
-                recordingState = .idle
-                presentError(error)
-            }
+    private var isAudioPlayerDisabled: Bool {
+        switch recordingState {
+        case .idle, .failed:
+            false
+
+        case .requestingPermission, .recording, .saving:
+            true
         }
     }
 
@@ -203,28 +324,8 @@ struct MeetingDetailView: View {
         isShowingError = true
     }
 
-    // MARK: - Formatting
-
-    private func formattedDuration(_ duration: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(duration.rounded()))
-
-        let hours = totalSeconds / 3_600
-        let minutes = (totalSeconds % 3_600) / 60
-        let seconds = totalSeconds % 60
-
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        }
-
-        return String(format: "%d:%02d", minutes, seconds)
+    private func presentRecordingError(_ error: Error) {
+        recordingState = .failed(message: error.localizedDescription)
+        presentError(error)
     }
-}
-
-// MARK: - Recording State
-
-private enum RecordingState {
-    case idle
-    case starting
-    case recording(startedAt: Date)
-    case stopping
 }

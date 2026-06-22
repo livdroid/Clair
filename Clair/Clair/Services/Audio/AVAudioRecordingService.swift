@@ -18,8 +18,8 @@ final class AVAudioRecordingService: NSObject, AudioRecordingService {
         recorder?.isRecording == true
     }
 
-    init(fileStore: AudioFileStore = AudioFileStore()) {
-        self.fileStore = fileStore
+    init(fileStore: AudioFileStore? = nil) {
+        self.fileStore = fileStore ?? AudioFileStore()
     }
 
     func requestPermission() async -> Bool {

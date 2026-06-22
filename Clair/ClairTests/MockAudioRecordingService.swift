@@ -7,7 +7,6 @@
 
 
 import Foundation
-import XCTest
 @testable import Clair
 
 @MainActor
@@ -41,38 +40,5 @@ final class MockAudioRecordingService: AudioRecordingService {
 
         isRecording = false
         return recordedAudio
-    }
-    
-    func testRecordingURLUsesMeetingIdentifier() {
-        let meetingID = UUID()
-        let store = AudioFileStore()
-
-        let url = store.recordingURL(for: meetingID)
-
-        XCTAssertEqual(
-            url.lastPathComponent,
-            "\(meetingID.uuidString).m4a"
-        )
-    }
-    
-    @MainActor
-    func testMockStopsWithRecordedAudio() throws {
-        let service = MockAudioRecordingService()
-
-        try service.startRecording(meetingID: UUID())
-        let audio = try service.stopRecording()
-
-        XCTAssertFalse(service.isRecording)
-        XCTAssertEqual(audio.duration, 42)
-    }
-    
-    @MainActor
-    func testMockCanRefusePermission() async {
-        let service = MockAudioRecordingService()
-        service.permissionGranted = false
-
-        let granted = await service.requestPermission()
-
-        XCTAssertFalse(granted)
     }
 }

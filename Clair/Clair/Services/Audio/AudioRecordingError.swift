@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum AudioRecordingError: LocalizedError {
+enum AudioRecordingError: LocalizedError, Equatable {
     case permissionDenied
     case alreadyRecording
     case notRecording

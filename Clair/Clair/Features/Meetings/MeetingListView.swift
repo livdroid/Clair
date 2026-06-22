@@ -42,7 +42,7 @@ struct MeetingListView: View {
             }
         } detail: {
             if let selectedMeeting {
-                MeetingDetailView(meeting: selectedMeeting)
+                MeetingDetailView(meeting: selectedMeeting).id(selectedMeeting.id)
             } else {
                 MeetingEmptyStateView()
             }

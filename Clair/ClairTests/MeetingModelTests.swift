@@ -11,38 +11,20 @@ import SwiftData
 
 @MainActor
 final class MeetingModelTests: XCTestCase {
-    
     func testCreateMeetingPersistsInContext() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        
-        let meeting = Meeting(title: "Reunion test")
+
+        let meeting = Meeting(title: "Réunion test")
         context.insert(meeting)
         try context.save()
-        
+
         let meetings = try context.fetch(FetchDescriptor<Meeting>())
-        
+
         XCTAssertEqual(meetings.count, 1)
-        XCTAssertEqual(meetings.first?.title, "Reunion test")
+        XCTAssertEqual(meetings.first?.title, "Réunion test")
     }
-    
-    @MainActor
-    final class MeetingModelTests: XCTestCase {
-        func testCreateMeetingPersistsInContext() throws {
-            let container = try SwiftDataTestSupport.makeInMemoryContainer()
-            let context = container.mainContext
-            
-            let meeting = Meeting(title: "Réunion test")
-            context.insert(meeting)
-            try context.save()
-            
-            let meetings = try context.fetch(FetchDescriptor<Meeting>())
-            
-            XCTAssertEqual(meetings.count, 1)
-            XCTAssertEqual(meetings.first?.title, "Réunion test")
-        }
-    }
-    
+
     @MainActor
     func testUpdateMeetingTitle() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
@@ -90,5 +72,34 @@ final class MeetingModelTests: XCTestCase {
         XCTAssertTrue(meeting.decisions.isEmpty)
         XCTAssertTrue(meeting.openQuestions.isEmpty)
         XCTAssertNil(meeting.audioFilePath)
+    }
+
+    func testAudioMetadataPersistsOnMeeting() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let meeting = Meeting(title: "Réunion audio")
+        context.insert(meeting)
+
+        meeting.audioFilePath = "Recordings/test.m4a"
+        meeting.duration = 42
+        meeting.startedAt = Date(timeIntervalSince1970: 100)
+        meeting.endedAt = Date(timeIntervalSince1970: 142)
+        meeting.updatedAt = Date(timeIntervalSince1970: 142)
+        try context.save()
+
+        let fetchedMeeting = try XCTUnwrap(
+            context.fetch(FetchDescriptor<Meeting>()).first
+        )
+
+        XCTAssertEqual(fetchedMeeting.audioFilePath, "Recordings/test.m4a")
+        XCTAssertEqual(fetchedMeeting.duration, 42)
+        XCTAssertEqual(
+            fetchedMeeting.startedAt,
+            Date(timeIntervalSince1970: 100)
+        )
+        XCTAssertEqual(
+            fetchedMeeting.endedAt,
+            Date(timeIntervalSince1970: 142)
+        )
     }
 }
