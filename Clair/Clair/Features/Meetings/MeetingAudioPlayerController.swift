@@ -22,6 +22,7 @@ final class MeetingAudioPlayerController {
 
     private let service: any AudioPlaybackService
     private var progressTask: Task<Void, Never>?
+    private var isLoaded = false
 
     private(set) var state: State = .idle
     private(set) var duration: TimeInterval = 0
@@ -33,6 +34,8 @@ final class MeetingAudioPlayerController {
     
     func load(path: String?) {
         stop()
+        isLoaded = false
+        duration = 0
 
         guard let path else {
             state = .idle
@@ -50,6 +53,7 @@ final class MeetingAudioPlayerController {
 
         do {
             try service.load(url: url)
+            isLoaded = true
             duration = service.duration
             currentTime = 0
             state = .ready
@@ -89,9 +93,7 @@ final class MeetingAudioPlayerController {
         service.stop()
         currentTime = 0
 
-        if state != .idle {
-            state = .ready
-        }
+        state = isLoaded ? .ready : .idle
     }
     
     private func startProgressUpdates() {

@@ -68,22 +68,30 @@ struct MeetingDetailView: View {
             if case let .failed(message) = audioPlayer.state {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
+
+                Button(
+                    "Reload",
+                    systemImage: "arrow.clockwise",
+                    action: reloadAudio
+                )
+                .disabled(isAudioPlayerDisabled)
             }
-            
+
             HStack {
                 Button(
                     audioPlayer.state == .playing ? "Pause" : "Play",
                     systemImage: audioPlayer.state == .playing
                         ? "pause.fill"
                         : "play.fill"
-                ) {
-                    audioPlayer.togglePlayback()
-                }
+                ) { audioPlayer.togglePlayback() }
+                .keyboardShortcut(.space, modifiers: [])
 
                 Button("Restart", systemImage: "backward.end.fill") {
                     audioPlayer.seek(to: 0)
                 }
+                .keyboardShortcut("r", modifiers: [.command])
             }
+            .disabled(arePlaybackControlsDisabled)
 
             Slider(
                 value: Binding(
@@ -93,12 +101,17 @@ struct MeetingDetailView: View {
                 in: 0...max(audioPlayer.duration, 1)
             )
             .accessibilityLabel("Playback position")
+            .accessibilityValue(
+                "\(audioPlayer.currentTime.formattedClockTime()) sur \(audioPlayer.duration.formattedClockTime())"
+            )
+            .disabled(arePlaybackControlsDisabled)
 
             Text(
                 "\(audioPlayer.currentTime.formattedClockTime()) / \(audioPlayer.duration.formattedClockTime())"
-            )                .monospacedDigit()
+            )
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
-        }.disabled(arePlaybackControlsDisabled)
+        }
     }
 
     private var meetingInformationSection: some View {
@@ -231,6 +244,10 @@ struct MeetingDetailView: View {
         }
 
         return audioFileStore.fileURL(for: audioFilePath)
+    }
+
+    private func reloadAudio() {
+        audioPlayer.load(path: resolvedAudioURL?.path)
     }
 
     private func prepareToStartRecording() {
